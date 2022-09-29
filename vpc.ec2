@@ -1,0 +1,131 @@
+resource "aws_vpc" "main" {
+  cidr_block       = var.cidrblock
+  instance_tenancy = var.tenancy
+  tags = {
+    Name = var.name
+    terraformed="true"
+    created_by= var.created_by
+  }
+}
+
+resource "aws_internet_gateway" "gw" {
+  vpc_id = aws_vpc.main.id
+  tags = {
+    Name = var.igw_name
+    terraformed="true"
+    created_by= var.created_by
+  }
+}
+
+resource "aws_subnet" "pub-sub1" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = var.ps_cidr
+  availability_zone = "ap-south-1a"
+  map_public_ip_on_launch = var.map_public_ip_on_launch
+  enable_resource_name_dns_a_record_on_launch = var.enable_resource_name_dns_a_record_on_launch
+  tags = {
+    Name = var.ps_name
+    created_by= var.created_by
+  }
+}
+
+resource "aws_subnet" "pub-sub2" {
+  vpc_id     = aws_vpc.main.id
+  cidr_block = "192.0.20.0/24"
+  availability_zone = "ap-south-1a"
+  map_public_ip_on_launch = var.map_public_ip_on_launch
+  enable_resource_name_dns_a_record_on_launch = var.enable_resource_name_dns_a_record_on_launch
+  tags = {
+    Name = var.ps_name
+    created_by= var.created_by
+  }
+}
+
+resource "aws_route_table" "public_rt" {
+  vpc_id = aws_vpc.main.id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.gw.id
+  }
+
+  tags = {
+    Name = var.prt_name
+    created_by= var.created_by
+  }
+}
+
+resource "aws_route_table_association" "pub-aso1" {
+  subnet_id      = aws_subnet.pub-sub1.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+resource "aws_route_table_association" "pub-aso2" {
+  subnet_id      = aws_subnet.pub-sub2.id
+  route_table_id = aws_route_table.public_rt.id
+}
+
+
+resource "aws_security_group" "demo" {
+  vpc_id      = aws_vpc.main.id
+  name        = "demo"
+  description = "allow 22 port"
+  ingress = [
+    {
+      description      = ""
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
+      from_port        = 22
+      to_port          = 22
+      protocol         = "tcp"
+      cidr_blocks      = [ "0.0.0.0/0" ]
+      ipv6_cidr_blocks = [ "::/0" ]
+    } 
+      
+  ]
+
+  egress = [
+    { 
+      description      = ""
+      prefix_list_ids  = []
+      security_groups  = []
+      self             = false
+      from_port        = 0
+      to_port          = 0
+      protocol         = "-1"
+      cidr_blocks      = ["0.0.0.0/0"]
+      ipv6_cidr_blocks = ["::/0"]
+    }
+  ]
+
+  tags = {
+    Name = var.created_by
+  }
+}
+
+
+
+
+resource "aws_key_pair" "key" {
+  key_name   = var.keyname
+  public_key = "ssh-rsa AAAAB3NzaCBAAABgQCz9RLYTDo1lUYLXXZNFXqBQme/ej+Bnu/0Wrn0EjYSmXmOhVjXUMhphF6Q1gAawwVzRBmblRWeWtuWf3LVw9syiyzeb1N4JJgXu7VK/R4DVdfoEKMNR5lHWkSAENGUrZ1jR/wPaYnAKk6mw2sFu0xQJ9PHeOMjcg/mWezUnv+H/hFpmFpVFDJXJCAHNmRw5FFdemV/hIMfWCqtU8/Dgv0GWou+GIVGsMhZ27v9VVpy3Po3UiurDYCDQQyig+wDgeQakX8qsDJYl8PPCwTiEv17ZAjkRRupMxM3YvNaztc8O0SE+4TUlx+HQw3VEW0tLjvVERzSMLZNZA1oftROKwDE8snZwTR4EQBlH2OupHw/+3PZ3j9ApnX7T0BCFHXCL9GQB0ukoL74lSuEoQYUTY0BqUEI31dqQ3YVplbsoNXZKw9/HYw0fIM4GwlKUWPT7MChN/rspW8gIhX+LqmJWHlgVrt+8xLQZXCLmpPnfZXgBY/wXYyb6EnH1r1ucK722e8= sesha@Ganesh"
+  tags = {
+    Name = var.created_by
+  }
+}
+
+
+
+
+resource "aws_instance" "server" {
+  ami                          =  "ami-062df10d14676e201"
+  instance_type                =  var.type
+  subnet_id                    =  aws_subnet.pub-sub1.id
+  vpc_security_group_ids       =  [aws_security_group.demo.id]
+  key_name                     =  aws_key_pair.key.id
+  tags = {
+    Name = var.created_by
+  }
+
+}
